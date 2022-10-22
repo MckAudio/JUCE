@@ -297,6 +297,8 @@ private:
 
     void initialiseXSettings();
 
+    int setupXTouch(::Window) const;
+
     //==============================================================================
     void handleKeyPressEvent        (LinuxComponentPeer*, XKeyEvent&) const;
     void handleKeyReleaseEvent      (LinuxComponentPeer*, const XKeyEvent&) const;
@@ -317,8 +319,10 @@ private:
     void handleClientMessageEvent   (LinuxComponentPeer*, XClientMessageEvent&, XEvent&) const;
     void handleXEmbedMessage        (LinuxComponentPeer*, XClientMessageEvent&) const;
 
-    void handleGenericEvent         (LinuxComponentPeer*, XGenericEventCookie&) const;
-    void handleTouchEvent (LinuxComponentPeer*, const XButtonPressedEvent&) const;
+    void handleGenericEvent         (LinuxComponentPeer*, const XIDeviceEvent*) const;
+    void handleTouchPressEvent      (LinuxComponentPeer*, const XIDeviceEvent*);
+    void handleTouchReleaseEvent    (LinuxComponentPeer*, const XIDeviceEvent*);
+    void handleTouchUpdateEvent     (LinuxComponentPeer*, const XIDeviceEvent*);
 
     void dismissBlockingModals      (LinuxComponentPeer*) const;
     void dismissBlockingModals      (LinuxComponentPeer*, const XConfigureEvent&) const;
@@ -339,6 +343,13 @@ private:
    #if JUCE_USE_XSHM
     std::map<::Window, int> shmPaintsPendingMap;
    #endif
+
+   #if JUCE_USE_XINPUT2
+    int xi2opcode;
+   #endif
+    std::map<int, int> xiTouchIds;
+    std::set<int> xiFreeTouchIds;
+    int currentTouchIdx = 0;
 
     int shmCompletionEvent = 0;
     int pointerMap[5] = {};

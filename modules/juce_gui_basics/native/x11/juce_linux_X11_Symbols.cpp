@@ -233,7 +233,9 @@ bool X11Symbols::loadAllSymbols()
    #if JUCE_USE_XINPUT2
     loadSymbols(xLib, xiLib,
                  makeSymbolBinding (xGetEventData,               "XGetEventData"),
-                 makeSymbolBinding (xFreeEventData,              "XFreeEventData"));
+                 makeSymbolBinding (xFreeEventData,              "XFreeEventData"),
+                 makeSymbolBinding (xIQueryVersion,              "XIQueryVersion"),
+                 makeSymbolBinding (xISelectEvents,               "XISelectEvents"));
    #endif
 
     return true;

@@ -593,6 +593,14 @@ public:
     JUCE_GENERATE_FUNCTION_WITH_DEFAULT (XFreeEventData, xFreeEventData,
                                          (::Display*, XGenericEventCookie*),
                                          void)
+
+    JUCE_GENERATE_FUNCTION_WITH_DEFAULT (XIQueryVersion, xIQueryVersion,
+                                         (::Display*, int*, int*),
+                                         Status)
+
+    JUCE_GENERATE_FUNCTION_WITH_DEFAULT (XISelectEvents, xISelectEvents,
+                                         (::Display*, ::Window, XIEventMask*, int),
+                                         Status)
    #endif
 
     //==============================================================================

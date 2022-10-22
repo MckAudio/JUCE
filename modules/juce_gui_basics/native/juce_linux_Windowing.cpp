@@ -717,7 +717,8 @@ bool MouseInputSource::SourceList::addSource()
 
 bool MouseInputSource::SourceList::canUseTouch()
 {
-    return false;
+    // TODO Check availability of xinput2 and touch devices
+    return true;
 }
 
 Point<float> MouseInputSource::getCurrentRawMousePosition()
