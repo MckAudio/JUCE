@@ -297,7 +297,9 @@ private:
 
     void initialiseXSettings();
 
+#if JUCE_USE_XINPUT2
     int setupXTouch(::Window) const;
+#endif
 
     //==============================================================================
     void handleKeyPressEvent        (LinuxComponentPeer*, XKeyEvent&) const;
@@ -319,10 +321,9 @@ private:
     void handleClientMessageEvent   (LinuxComponentPeer*, XClientMessageEvent&, XEvent&) const;
     void handleXEmbedMessage        (LinuxComponentPeer*, XClientMessageEvent&) const;
 
-    void handleGenericEvent         (LinuxComponentPeer*, const XIDeviceEvent*) const;
-    void handleTouchPressEvent      (LinuxComponentPeer*, const XIDeviceEvent*);
-    void handleTouchReleaseEvent    (LinuxComponentPeer*, const XIDeviceEvent*);
-    void handleTouchUpdateEvent     (LinuxComponentPeer*, const XIDeviceEvent*);
+#if JUCE_USE_XINPUT2
+    void handleTouchEvent(LinuxComponentPeer *peer, Point<float> &pos, const ::Time &t, int touchType, int contTouchId);
+#endif
 
     void dismissBlockingModals      (LinuxComponentPeer*) const;
     void dismissBlockingModals      (LinuxComponentPeer*, const XConfigureEvent&) const;
@@ -345,11 +346,10 @@ private:
    #endif
 
    #if JUCE_USE_XINPUT2
-    int xi2opcode;
-   #endif
     std::map<int, int> xiTouchIds;
     std::set<int> xiFreeTouchIds;
     int currentTouchIdx = 0;
+   #endif
 
     int shmCompletionEvent = 0;
     int pointerMap[5] = {};
