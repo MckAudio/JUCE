@@ -114,6 +114,13 @@
  #define JUCE_USE_XCURSOR 1
 #endif
 
+/** Config: JUCE_USE_XINPUT2
+    Uses Xinput2 extension to enable multitouch display input on Linux.
+*/
+#ifndef JUCE_USE_XINPUT2
+ #define JUCE_USE_XINPUT2 0
+#endif
+
 /** Config: JUCE_WIN_PER_MONITOR_DPI_AWARE
     Enables per-monitor DPI awareness on Windows 8.1 and above.
 */
@@ -357,6 +364,10 @@ namespace juce
   #if JUCE_USE_XCURSOR
    // If you're missing this header, you need to install the libxcursor-dev package
    #include <X11/Xcursor/Xcursor.h>
+  #endif
+
+  #if JUCE_USE_XINPUT2
+   #include <X11/extensions/XInput2.h>
   #endif
 
   #undef SIZEOF

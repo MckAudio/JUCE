@@ -585,6 +585,15 @@ public:
                                          (::Display*, int*, int*, Bool*),
                                          Bool)
    #endif
+   #if JUCE_USE_XINPUT2
+    JUCE_GENERATE_FUNCTION_WITH_DEFAULT (XGetEventData, xGetEventData,
+                                         (::Display*, XGenericEventCookie*),
+                                         Bool)
+
+    JUCE_GENERATE_FUNCTION_WITH_DEFAULT (XFreeEventData, xFreeEventData,
+                                         (::Display*, XGenericEventCookie*),
+                                         void)
+   #endif
 
     //==============================================================================
     JUCE_DECLARE_SINGLETON (X11Symbols, false)
@@ -611,6 +620,9 @@ private:
    #endif
    #if JUCE_USE_XRANDR
     DynamicLibrary xrandrLib   { "libXrandr.so.2" };
+   #endif
+   #if JUCE_USE_XINPUT2
+    DynamicLibrary xiLib       { "libXi.so.6"};
    #endif
 
     //==============================================================================

@@ -317,6 +317,9 @@ private:
     void handleClientMessageEvent   (LinuxComponentPeer*, XClientMessageEvent&, XEvent&) const;
     void handleXEmbedMessage        (LinuxComponentPeer*, XClientMessageEvent&) const;
 
+    void handleGenericEvent         (LinuxComponentPeer*, XGenericEventCookie&) const;
+    void handleTouchEvent (LinuxComponentPeer*, const XButtonPressedEvent&) const;
+
     void dismissBlockingModals      (LinuxComponentPeer*) const;
     void dismissBlockingModals      (LinuxComponentPeer*, const XConfigureEvent&) const;
     void updateConstraints          (::Window, ComponentPeer&) const;

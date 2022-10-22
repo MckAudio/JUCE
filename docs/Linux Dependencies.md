@@ -42,6 +42,7 @@ or
 - libxinerama-dev (unless `JUCE_USE_XINERAMA=0`)
 - libxrandr-dev (unless `JUCE_USE_XRANDR=0`)
 - libxrender-dev (unless `JUCE_USE_XRENDER=0`)
+- libxi-dev (unless `JUCE_USE_XINPUT2=0`)
 
 #### juce_gui_extra
 - libwebkit2gtk-4.0-dev (unless `JUCE_WEB_BROWSER=0`)

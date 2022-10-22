@@ -230,6 +230,11 @@ bool X11Symbols::loadAllSymbols()
                  makeSymbolBinding (xShmPutImage,                "XShmPutImage"),
                  makeSymbolBinding (xShmQueryVersion,            "XShmQueryVersion"));
    #endif
+   #if JUCE_USE_XINPUT2
+    loadSymbols(xLib, xiLib,
+                 makeSymbolBinding (xGetEventData,               "XGetEventData"),
+                 makeSymbolBinding (xFreeEventData,              "XFreeEventData"));
+   #endif
 
     return true;
 }

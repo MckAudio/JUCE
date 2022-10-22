@@ -3319,6 +3319,7 @@ void XWindowSystem::handleWindowMessage (LinuxComponentPeer* peer, XEvent& event
         case SelectionClear:        dragAndDropStateMap[peer].handleExternalSelectionClear();          break;
         case SelectionRequest:      dragAndDropStateMap[peer].handleExternalSelectionRequest (event);  break;
         case PropertyNotify:        propertyNotifyEvent        (peer, event.xproperty);                break;
+        case GenericEvent:          handleGenericEvent         (peer, event.xcookie);                  break;
 
         case CirculateNotify:
         case CreateNotify:
@@ -3850,6 +3851,21 @@ void XWindowSystem::handleXEmbedMessage (LinuxComponentPeer* peer, XClientMessag
         default:
             break;
     }
+}
+
+void XWindowSystem::handleGenericEvent (LinuxComponentPeer* peer, XGenericEventCookie& cookie) const
+{
+    #if JUCE_USE_XINPUT2
+    if (X11Symbols::getInstance()->xGetEventData(display, &cookie)) {
+        const auto devEvent = (const XIDeviceEvent *)cookie.data;
+
+        X11Symbols::getInstance()->xFreeEventData(display, &cookie);
+    }
+    #endif
+}
+
+void XWindowSystem::handleTouchEvent (LinuxComponentPeer* peer, const XButtonPressedEvent& buttonPressEvent) const
+{
 }
 
 //==============================================================================
