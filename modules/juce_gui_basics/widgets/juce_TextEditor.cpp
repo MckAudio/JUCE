@@ -944,14 +944,10 @@ TextEditor::TextEditor (const String& name, juce_wchar passwordChar)
 
     setWantsKeyboardFocus (true);
     recreateCaret();
-
-    juce::Desktop::getInstance().addGlobalMouseListener (this);
 }
 
 TextEditor::~TextEditor()
 {
-    juce::Desktop::getInstance().removeGlobalMouseListener (this);
-
     textValue.removeListener (textHolder);
     textValue.referTo (Value());
 
@@ -1046,7 +1042,7 @@ bool TextEditor::isReadOnly() const noexcept
 
 bool TextEditor::isTextInputActive() const
 {
-    return ! isReadOnly() && (! clicksOutsideDismissVirtualKeyboard || mouseDownInEditor);
+    return ! isReadOnly() && (! clicksOutsideDismissVirtualKeyboard || globalMouseListener.lastMouseDownInEditor());
 }
 
 void TextEditor::setReturnKeyStartsNewLine (bool shouldStartNewLine)
@@ -1851,11 +1847,6 @@ void TextEditor::performPopupMenuAction (const int menuItemID)
 //==============================================================================
 void TextEditor::mouseDown (const MouseEvent& e)
 {
-    mouseDownInEditor = e.originalComponent == this;
-
-    if (! mouseDownInEditor)
-        return;
-
     beginDragAutoRepeat (100);
     newTransaction();
 
@@ -1893,9 +1884,6 @@ void TextEditor::mouseDown (const MouseEvent& e)
 
 void TextEditor::mouseDrag (const MouseEvent& e)
 {
-    if (! mouseDownInEditor)
-        return;
-
     if (wasFocused || ! selectAllTextWhenFocused)
         if (! (popupMenuEnabled && e.mods.isPopupMenu()))
             moveCaretTo (getTextIndexAt (e.getPosition()), true);
@@ -1903,9 +1891,6 @@ void TextEditor::mouseDrag (const MouseEvent& e)
 
 void TextEditor::mouseUp (const MouseEvent& e)
 {
-    if (! mouseDownInEditor)
-        return;
-
     newTransaction();
     textHolder->restartTimer();
 
@@ -1918,9 +1903,6 @@ void TextEditor::mouseUp (const MouseEvent& e)
 
 void TextEditor::mouseDoubleClick (const MouseEvent& e)
 {
-    if (! mouseDownInEditor)
-        return;
-
     int tokenEnd = getTextIndexAt (e.getPosition());
     int tokenStart = 0;
 
@@ -1987,9 +1969,6 @@ void TextEditor::mouseDoubleClick (const MouseEvent& e)
 
 void TextEditor::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& wheel)
 {
-    if (! mouseDownInEditor)
-        return;
-
     if (! viewport->useMouseWheelMoveIfNeeded (e, wheel))
         Component::mouseWheelMove (e, wheel);
 }
@@ -2036,7 +2015,13 @@ bool TextEditor::moveCaretUp (bool selecting)
         return moveCaretToStartOfLine (selecting);
 
     const auto caretPos = (getCaretRectangle() - getTextOffset()).toFloat();
-    return moveCaretWithTransaction (indexAtPosition (caretPos.getX(), caretPos.getY() - 1.0f), selecting);
+
+    const auto newY = caretPos.getY() - 1.0f;
+
+    if (newY < 0.0f)
+        return moveCaretToStartOfLine (selecting);
+
+    return moveCaretWithTransaction (indexAtPosition (caretPos.getX(), newY), selecting);
 }
 
 bool TextEditor::moveCaretDown (bool selecting)
@@ -2614,9 +2599,9 @@ int TextEditor::indexAtPosition (const float x, const float y) const
     {
         for (Iterator i (*this); i.next();)
         {
-            if (y < i.lineY + i.lineHeight)
+            if (y < i.lineY + (i.lineHeight * lineSpacing))
             {
-                if (y < i.lineY)
+                if (jmax (0.0f, y) < i.lineY)
                     return jmax (0, i.indexInText - 1);
 
                 if (x <= i.atomX || i.atom->isNewLine())

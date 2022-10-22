@@ -944,9 +944,10 @@ struct WorkSubmitter
     CriticalSection* workMutex;
 };
 
-template <typename Trivial, std::enable_if_t<std::is_trivial<Trivial>::value, int> = 0>
+template <typename Trivial>
 static auto toChars (Trivial value)
 {
+    static_assert (std::is_trivial_v<Trivial>);
     std::array<char, sizeof (Trivial)> result;
     writeUnaligned (result.data(), value);
     return result;
@@ -956,7 +957,7 @@ template <typename Context>
 class WorkQueue
 {
 public:
-    static_assert (std::is_trivial<Context>::value, "Context must be copyable as bytes");
+    static_assert (std::is_trivial_v<Context>, "Context must be copyable as bytes");
 
     explicit WorkQueue (int size)
         : fifo (size), data (static_cast<size_t> (size)) {}
@@ -2507,7 +2508,7 @@ public:
             // In this case, we find the closest label by searching the midpoints of the scale
             // point values.
             const auto index = std::distance (midPoints.begin(),
-                                              std::lower_bound (midPoints.begin(), midPoints.end(), normalisedValue));
+                                              std::lower_bound (midPoints.begin(), midPoints.end(), denormalised));
             jassert (isPositiveAndBelow (index, info.scalePoints.size()));
             return info.scalePoints[(size_t) index].label;
         }
@@ -2549,6 +2550,7 @@ private:
             return {};
 
         std::vector<float> result;
+        result.reserve (set.size() - 1);
 
         for (auto it = std::next (set.begin()); it != set.end(); ++it)
             result.push_back ((std::prev (it)->value + it->value) * 0.5f);
@@ -3656,8 +3658,8 @@ private:
 
     union Data
     {
-        static_assert (std::is_trivial<PortBacking>::value,  "PortBacking must be trivial");
-        static_assert (std::is_trivial<PatchBacking>::value, "PatchBacking must be trivial");
+        static_assert (std::is_trivial_v<PortBacking>,  "PortBacking must be trivial");
+        static_assert (std::is_trivial_v<PatchBacking>, "PatchBacking must be trivial");
 
         explicit Data (PortBacking p)  : port  (p) {}
         explicit Data (PatchBacking p) : patch (p) {}

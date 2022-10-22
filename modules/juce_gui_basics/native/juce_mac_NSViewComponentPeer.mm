@@ -163,8 +163,6 @@ public:
         }
       #endif
 
-        createCVDisplayLink();
-
         if (isSharedWindow)
         {
             window = [viewToAttachTo window];
@@ -180,6 +178,7 @@ public:
                                                        styleMask: getNSWindowStyleMask (windowStyleFlags)
                                                          backing: NSBackingStoreBuffered
                                                            defer: YES];
+            [window setColorSpace: [NSColorSpace sRGBColorSpace]];
             setOwner (window, this);
 
             if (@available (macOS 10.10, *))
@@ -221,7 +220,7 @@ public:
             scopedObservers.emplace_back (view, frameChangedSelector, NSWindowDidMoveNotification, window);
             scopedObservers.emplace_back (view, frameChangedSelector, NSWindowDidMiniaturizeNotification, window);
             scopedObservers.emplace_back (view, @selector (windowWillMiniaturize:), NSWindowWillMiniaturizeNotification, window);
-            scopedObservers.emplace_back (view, @selector (windowDidMiniaturize:), NSWindowDidMiniaturizeNotification, window);
+            scopedObservers.emplace_back (view, @selector (windowDidDeminiaturize:), NSWindowDidDeminiaturizeNotification, window);
         }
 
         auto alpha = component.getAlpha();
@@ -242,9 +241,6 @@ public:
 
     ~NSViewComponentPeer() override
     {
-        CVDisplayLinkStop (displayLink);
-        dispatch_source_cancel (displaySource);
-
         scopedObservers.clear();
 
         setOwner (view, nullptr);
@@ -1028,6 +1024,12 @@ public:
         return areAnyWindowsInLiveResize();
     }
 
+    void onVBlank()
+    {
+        vBlankListeners.call ([] (auto& l) { l.onVBlank(); });
+        setNeedsDisplayRectangles();
+    }
+
     void setNeedsDisplayRectangles()
     {
         if (deferredRepaints.isEmpty())
@@ -1200,11 +1202,6 @@ public:
         setNeedsDisplayRectangles();
     }
 
-    void windowDidChangeScreen()
-    {
-        updateCVDisplayLinkScreen();
-    }
-
     void viewMovedToWindow()
     {
         if (isSharedWindow)
@@ -1224,9 +1221,6 @@ public:
             windowObservers.emplace_back (view, dismissModalsSelector, NSWindowWillMiniaturizeNotification, currentWindow);
             windowObservers.emplace_back (view, becomeKeySelector, NSWindowDidBecomeKeyNotification, currentWindow);
             windowObservers.emplace_back (view, resignKeySelector, NSWindowDidResignKeyNotification, currentWindow);
-            windowObservers.emplace_back (view, @selector (windowDidChangeScreen:), NSWindowDidChangeScreenNotification, currentWindow);
-
-            updateCVDisplayLinkScreen();
         }
     }
 
@@ -1618,6 +1612,65 @@ public:
     static const SEL resignKeySelector;
 
 private:
+    JUCE_DECLARE_WEAK_REFERENCEABLE (NSViewComponentPeer)
+
+    // Note: the OpenGLContext also has a SharedResourcePointer<PerScreenDisplayLinks> to
+    // avoid unnecessarily duplicating display-link threads.
+    SharedResourcePointer<PerScreenDisplayLinks> sharedDisplayLinks;
+
+    class AsyncRepainter : private AsyncUpdater
+    {
+    public:
+        explicit AsyncRepainter (NSViewComponentPeer& o) : owner (o) {}
+        ~AsyncRepainter() override { cancelPendingUpdate(); }
+
+        void markUpdated (const CGDirectDisplayID x)
+        {
+            {
+                const std::scoped_lock lock { mutex };
+
+                if (std::find (backgroundDisplays.cbegin(), backgroundDisplays.cend(), x) == backgroundDisplays.cend())
+                    backgroundDisplays.push_back (x);
+            }
+
+            triggerAsyncUpdate();
+        }
+
+    private:
+        void handleAsyncUpdate() override
+        {
+            {
+                const std::scoped_lock lock { mutex };
+                mainThreadDisplays = backgroundDisplays;
+                backgroundDisplays.clear();
+            }
+
+            for (const auto& display : mainThreadDisplays)
+                if (auto* peerView = owner.view)
+                    if (auto* peerWindow = [peerView window])
+                        if (display == ScopedDisplayLink::getDisplayIdForScreen ([peerWindow screen]))
+                            owner.onVBlank();
+        }
+
+        NSViewComponentPeer& owner;
+        std::mutex mutex;
+        std::vector<CGDirectDisplayID> backgroundDisplays, mainThreadDisplays;
+    };
+
+    AsyncRepainter asyncRepainter { *this };
+
+    /*  Creates a function object that can be called from an arbitrary thread (probably a CVLink
+        thread). When called, this function object will trigger a call to setNeedsDisplayRectangles
+        as soon as possible on the main thread, for any peers currently on the provided NSScreen.
+    */
+    PerScreenDisplayLinks::Connection connection
+    {
+        sharedDisplayLinks->registerFactory ([this] (CGDirectDisplayID display)
+        {
+            return [this, display] { asyncRepainter.markUpdated (display); };
+        })
+    };
+
     static NSView* createViewInstance();
     static NSWindow* createWindowInstance();
 
@@ -1784,48 +1837,6 @@ private:
     }
 
     //==============================================================================
-    void onDisplaySourceCallback()
-    {
-        setNeedsDisplayRectangles();
-    }
-
-    void onDisplayLinkCallback()
-    {
-        dispatch_source_merge_data (displaySource, 1);
-    }
-
-    static CVReturn displayLinkCallback (CVDisplayLinkRef, const CVTimeStamp*, const CVTimeStamp*,
-                                         CVOptionFlags, CVOptionFlags*, void* context)
-    {
-        static_cast<NSViewComponentPeer*> (context)->onDisplayLinkCallback();
-        return kCVReturnSuccess;
-    }
-
-    void updateCVDisplayLinkScreen()
-    {
-        auto viewDisplayID = (CGDirectDisplayID) [[window.screen.deviceDescription objectForKey: @"NSScreenNumber"] unsignedIntegerValue];
-        auto result = CVDisplayLinkSetCurrentCGDisplay (displayLink, viewDisplayID);
-        jassertquiet (result == kCVReturnSuccess);
-    }
-
-    void createCVDisplayLink()
-    {
-        displaySource = dispatch_source_create (DISPATCH_SOURCE_TYPE_DATA_ADD, 0, 0, dispatch_get_main_queue());
-        dispatch_source_set_event_handler (displaySource, ^(){ onDisplaySourceCallback(); });
-        dispatch_resume (displaySource);
-
-        auto cvReturn = CVDisplayLinkCreateWithActiveCGDisplays (&displayLink);
-        jassertquiet (cvReturn == kCVReturnSuccess);
-
-        cvReturn = CVDisplayLinkSetOutputCallback (displayLink, &displayLinkCallback, this);
-        jassertquiet (cvReturn == kCVReturnSuccess);
-
-        CVDisplayLinkStart (displayLink);
-    }
-
-    CVDisplayLinkRef displayLink = nullptr;
-    dispatch_source_t displaySource = nullptr;
-
     int numFramesToSkipMetalRenderer = 0;
     std::unique_ptr<CoreGraphicsMetalLayerRenderer<NSView>> metalRenderer;
 
@@ -1967,12 +1978,6 @@ struct JuceNSViewClass   : public NSViewComponentPeerWrapper<ObjCClass<NSView>>
 
                 p->redirectMovedOrResized();
             }
-        });
-
-        addMethod (@selector (windowDidChangeScreen:), [] (id self, SEL, NSNotification*)
-        {
-            if (auto* p = getOwner (self))
-                p->windowDidChangeScreen();
         });
 
         addMethod (@selector (wantsDefaultClipping), [] (id, SEL) { return YES; }); // (this is the default, but may want to customise it in future)

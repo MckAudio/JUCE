@@ -689,7 +689,7 @@ public:
                        "added separated by a semicolon. The App Groups Capability setting must be enabled for this setting to have any effect.");
 
         props.add (new ChoicePropertyComponent (keepCustomXcodeSchemesValue, "Keep Custom Xcode Schemes"),
-                   "Enable this to keep any Xcode schemes you have created for debugging or running, e.g. to launch a plug-in in"
+                   "Enable this to keep any Xcode schemes you have created for debugging or running, e.g. to launch a plug-in in "
                    "various hosts. If disabled, all schemes are replaced by a default set.");
 
         props.add (new ChoicePropertyComponent (useHeaderMapValue, "USE_HEADERMAP"),
@@ -1048,7 +1048,7 @@ public:
     struct XcodeTarget : build_tools::ProjectType::Target
     {
         //==============================================================================
-        XcodeTarget (build_tools::ProjectType::Target::Type targetType, const XcodeProjectExporter& exporter)
+        XcodeTarget (Type targetType, const XcodeProjectExporter& exporter)
             : Target (targetType),
               owner (exporter)
         {
@@ -1614,9 +1614,10 @@ public:
             for (const auto& xcodeFlags : { XcodeWarningFlags { recommendedWarnings.common, "OTHER_CFLAGS" },
                                             XcodeWarningFlags { recommendedWarnings.cpp,    "OTHER_CPLUSPLUSFLAGS" } })
             {
-                auto flags = (xcodeFlags.flags.joinIntoString (" ")
-                                 + " " + owner.getExtraCompilerFlagsString()).trim();
-                flags = owner.replacePreprocessorTokens (config, flags);
+                const auto flags = owner.replacePreprocessorTokens (config,
+                                                                    (xcodeFlags.flags.joinIntoString (" ")
+                                                                     + " "
+                                                                     + config.getAllCompilerFlagsString()).trim());
 
                 if (flags.isNotEmpty())
                     s.set (xcodeFlags.variable, flags.quoted());
@@ -1699,10 +1700,13 @@ public:
                 s.set ("CODE_SIGN_ENTITLEMENTS", getEntitlementsFilename().quoted());
 
             {
-                auto cppStandard = owner.project.getCppStandardString();
+                const auto cppStandard = [&]() -> String
+                {
+                    if (owner.project.getCppStandardString() == "latest")
+                        return owner.project.getLatestNumberedCppStandardString();
 
-                if (cppStandard == "latest")
-                    cppStandard = owner.project.getLatestNumberedCppStandardString();
+                    return owner.project.getCppStandardString();
+                }();
 
                 s.set ("CLANG_CXX_LANGUAGE_STANDARD", (String (owner.shouldUseGNUExtensions() ? "gnu++"
                                                                                               : "c++") + cppStandard).quoted());
@@ -1851,7 +1855,7 @@ public:
                     flags.add (getLinkerFlagForLib (l));
             }
 
-            flags.add (owner.replacePreprocessorTokens (config, owner.getExtraLinkerFlagsString()));
+            flags.add (owner.replacePreprocessorTokens (config, config.getAllLinkerFlagsString()));
             flags = getCleanedStringArray (flags);
         }
 
@@ -1968,11 +1972,15 @@ public:
             StringArray paths (owner.extraSearchPaths);
             paths.addArray (config.getHeaderSearchPaths());
 
-            if (owner.project.getEnabledModules().isModuleEnabled ("juce_audio_plugin_client"))
+            constexpr auto audioPluginClient = "juce_audio_plugin_client";
+
+            if (owner.project.getEnabledModules().isModuleEnabled (audioPluginClient))
             {
-                // Needed to compile .r files
-                paths.add (owner.getModuleFolderRelativeToProject ("juce_audio_plugin_client")
-                                .rebased (owner.projectFolder, owner.getTargetFolder(), build_tools::RelativePath::buildTargetFolder)
+                paths.add (owner.getModuleFolderRelativeToProject (audioPluginClient)
+                                .getChildFile ("AU")
+                                .rebased (owner.projectFolder,
+                                          owner.getTargetFolder(),
+                                          build_tools::RelativePath::buildTargetFolder)
                                 .toUnixStyle());
             }
 
@@ -2299,7 +2307,16 @@ private:
 
             if (target->type == XcodeTarget::LV2PlugIn)
             {
-                auto script = "set -e\n\"$CONFIGURATION_BUILD_DIR/../"
+                // When building LV2 plugins on Arm macs, we need to load and run the plugin bundle
+                // during a post-build step in order to generate the plugin's supporting files. Arm
+                // macs will only load shared libraries if they are signed, but Xcode runs its
+                // signing step after any post-build scripts. As a workaround, we check whether the
+                // plugin is signed and generate an adhoc certificate if necessary, before running
+                // the manifest-generator.
+                auto script = "set -e\n"
+                              "xcrun codesign --verify \"$CONFIGURATION_BUILD_DIR/$PRODUCT_NAME\" "
+                              "|| xcrun codesign -s - \"$CONFIGURATION_BUILD_DIR/$PRODUCT_NAME\"\n"
+                              "\"$CONFIGURATION_BUILD_DIR/../"
                             + Project::getLV2FileWriterName()
                             + "\" \"$CONFIGURATION_BUILD_DIR/$PRODUCT_NAME\"\n";
 
