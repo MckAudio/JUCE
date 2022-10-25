@@ -3144,8 +3144,8 @@ int XWindowSystem::setupXTouch(::Window w) const
             XIEventMask mask;
             mask.deviceid = XIAllMasterDevices;
             mask.mask_len = XIMaskLen(XI_LASTEVENT);
-            mask.mask = (unsigned char *)malloc(mask.mask_len);
-            memset(mask.mask, 0, mask.mask_len);
+            mask.mask = (unsigned char *)malloc(static_cast<size_t>(mask.mask_len));
+            memset(mask.mask, 0, static_cast<size_t>(mask.mask_len));
             XISetMask(mask.mask, XI_TouchBegin);
             XISetMask(mask.mask, XI_TouchUpdate);
             XISetMask(mask.mask, XI_TouchEnd);
